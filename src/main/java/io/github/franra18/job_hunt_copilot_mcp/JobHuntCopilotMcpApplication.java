@@ -2,8 +2,10 @@ package io.github.franra18.job_hunt_copilot_mcp;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
 
 @SpringBootApplication
+@EnableJpaAuditing
 public class JobHuntCopilotMcpApplication {
 
 	public static void main(String[] args) {

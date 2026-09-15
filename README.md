@@ -71,3 +71,7 @@ El endpoint SSE quedará expuesto en: `http://localhost:8080/sse`
 * [Estructura de la base de datos](estructura_bd.md)
 
 ## Vídeo
+
+
+https://github.com/user-attachments/assets/65772638-d556-43ba-9f53-92cb965e1555
+

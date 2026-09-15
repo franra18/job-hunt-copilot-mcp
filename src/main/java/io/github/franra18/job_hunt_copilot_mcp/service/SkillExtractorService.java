@@ -3,19 +3,20 @@ package io.github.franra18.job_hunt_copilot_mcp.service;
 import io.github.franra18.job_hunt_copilot_mcp.domain.dto.response.SkillExtractionResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor
 public class SkillExtractorService {
-	private final ChatClient chatClient;
+	private final ObjectProvider<ChatClient> chatClientProvider;
 
 	public SkillExtractionResponse extract(String text) {
 		if (text == null || text.isBlank()) {
 			throw new IllegalArgumentException("jobDescription es obligatorio");
 		}
 		try {
-			SkillExtractionResponse response = chatClient.prompt()
+			SkillExtractionResponse response = chatClientProvider.getObject().prompt()
 					.system("Extrae competencias técnicas de una oferta. Separa requisitos obligatorios y deseables. "
 							+ "Devuelve solo el objeto estructurado y estandariza nombres equivalentes a su forma canonica "
 							+ "(Postgres -> PostgreSQL, ReactJS -> React, Node.js -> Node.js). "

@@ -12,6 +12,7 @@ import io.github.franra18.job_hunt_copilot_mcp.repository.SkillRepository;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,7 +22,7 @@ public class InterviewPrepService {
 	private final InterviewPrepQuestionRepository questionRepository;
 	private final JobApplicationRepository applicationRepository;
 	private final SkillRepository skillRepository;
-	private final ChatClient chatClient;
+	private final ObjectProvider<ChatClient> chatClientProvider;
 
 	@Transactional
 	public InterviewPrepResponse generateQuestions(Long applicationId) {
@@ -33,7 +34,7 @@ public class InterviewPrepService {
 				.orElse("sin competencias registradas");
 		GeneratedInterviewQuestionsResponse generated;
 		try {
-			generated = chatClient.prompt()
+			generated = chatClientProvider.getObject().prompt()
 					.system("Genera preguntas tecnicas dificiles para una entrevista. Cubre escenarios practicos, "
 							+ "trade-offs y debugging. Devuelve solo el objeto estructurado con entre 4 y 6 preguntas. "
 							+ "Cada pregunta debe incluir skillName, question, suggestedAnswerPoints y difficulty "

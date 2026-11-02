@@ -6,21 +6,21 @@ import io.github.franra18.job_hunt_copilot_mcp.domain.dto.response.JobApplicatio
 import io.github.franra18.job_hunt_copilot_mcp.domain.model.ApplicationStatus;
 import io.github.franra18.job_hunt_copilot_mcp.domain.model.Company;
 import io.github.franra18.job_hunt_copilot_mcp.domain.model.JobApplication;
-import io.github.franra18.job_hunt_copilot_mcp.domain.model.JobApplicationSkill;
 import io.github.franra18.job_hunt_copilot_mcp.domain.model.Skill;
 import io.github.franra18.job_hunt_copilot_mcp.repository.CompanyRepository;
 import io.github.franra18.job_hunt_copilot_mcp.repository.JobApplicationRepository;
 import io.github.franra18.job_hunt_copilot_mcp.repository.SkillRepository;
-import java.time.LocalDate;
-import java.util.HashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDate;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -31,123 +31,116 @@ public class JobApplicationService {
 
 	@Transactional
 	public JobApplicationResponse createApplication(CreateApplicationRequest request) {
-		requireText(request.getCompanyName(), "companyName");
-		requireText(request.getRoleTitle(), "roleTitle");
-		Company company = companyRepository.findByNameIgnoreCase(request.getCompanyName().trim())
-				.orElseGet(() -> {
-					Company created = new Company();
-					created.setName(request.getCompanyName().trim());
-					return companyRepository.save(created);
-				});
-
 		JobApplication application = new JobApplication();
-		application.setCompany(company);
-		application.setRoleTitle(request.getRoleTitle().trim());
-		application.setJobDescription(request.getJobDescription());
-		application.setJobUrl(request.getJobUrl());
-		application.setSalaryMin(request.getSalaryMin());
-		application.setSalaryMax(request.getSalaryMax());
-		application.setSalaryCurrency(request.getSalaryCurrency());
-		application.setAdditionalNotes(request.getAdditionalNotes());
+		application.setCompany(findOrCreateCompany(request.companyName()));
+		application.setRoleTitle(request.roleTitle());
+		application.setJobDescription(request.jobDescription());
+		application.setJobUrl(request.jobUrl());
+		application.setSalaryMin(request.salaryMin());
+		application.setSalaryMax(request.salaryMax());
+		application.setSalaryCurrency(request.salaryCurrency());
+		application.setAdditionalNotes(request.additionalNotes());
 		application.setStatus(ApplicationStatus.APPLIED);
 		application.setAppliedAt(LocalDate.now());
-		application = applicationRepository.save(application);
 
-		Set<String> required = new LinkedHashSet<>(request.getRequiredSkills() == null ? Set.of() : request.getRequiredSkills());
-		Set<String> optional = new LinkedHashSet<>(request.getOptionalSkills() == null ? Set.of() : request.getOptionalSkills());
-		Map<String, String> categories = request.getSkillCategories() == null ? Map.of() : request.getSkillCategories();
-		optional.removeAll(required);
-		addSkills(application, required, true, categories);
-		addSkills(application, optional, false, categories);
-		application = applicationRepository.save(application);
-		return toResponse(application);
+		Map<String, String> required = SkillNames.clean(request.requiredSkills());
+		Map<String, String> optional = SkillNames.clean(request.optionalSkills());
+		optional.keySet().removeAll(required.keySet());
+		Map<String, String> all = new LinkedHashMap<>(required);
+		all.putAll(optional);
+		Map<String, Skill> skills = findOrCreateSkills(all, normalizeCategories(request.skillCategories()));
+		required.keySet().forEach(key -> application.addSkill(skills.get(key), true));
+		optional.keySet().forEach(key -> application.addSkill(skills.get(key), false));
+
+		return toResponse(applicationRepository.save(application));
 	}
 
 	@Transactional
 	public JobApplicationResponse updateStatus(Long applicationId, ApplicationStatus status, String interviewNotes) {
-		JobApplication application = getEntity(applicationId);
+		if (status == null) {
+			throw new IllegalArgumentException("status es obligatorio");
+		}
+		JobApplication application = applicationRepository.getRequiredWithDetails(applicationId);
 		application.setStatus(status);
 		if (interviewNotes != null && !interviewNotes.isBlank()) {
 			application.setAdditionalNotes(appendNote(application.getAdditionalNotes(), interviewNotes));
 		}
-		application = applicationRepository.save(application);
 		return toResponse(application);
 	}
 
 	@Transactional(readOnly = true)
 	public JobApplicationResponse getApplication(Long applicationId) {
-		return toResponse(getEntity(applicationId));
+		return toResponse(applicationRepository.getRequiredWithDetails(applicationId));
 	}
 
 	@Transactional(readOnly = true)
 	public List<JobApplicationSummaryResponse> getApplications(ApplicationStatus status) {
 		List<JobApplication> applications = status == null
-				? applicationRepository.findAll()
-				: applicationRepository.findByStatus(status);
+				? applicationRepository.findAllByOrderByIdAsc()
+				: applicationRepository.findByStatusOrderByIdAsc(status);
 		return applications.stream()
-				.map(application -> new JobApplicationSummaryResponse(application.getId(), application.getCompany().getName(),
-						application.getRoleTitle(), application.getStatus(), application.getAppliedAt()))
+				.map(application -> new JobApplicationSummaryResponse(application.getId(),
+						application.getCompany().getName(), application.getRoleTitle(), application.getStatus(),
+						application.getAppliedAt()))
 				.toList();
 	}
 
-	private void addSkills(JobApplication application, Set<String> names, boolean required,
-			Map<String, String> categoriesByName) {
-		Map<String, String> normalizedNames = new java.util.LinkedHashMap<>();
-		Map<String, String> normalizedCategories = new java.util.HashMap<>();
-		categoriesByName.forEach((name, category) -> {
-			if (name != null && category != null && !name.isBlank() && !category.isBlank()) {
-				normalizedCategories.put(name.trim().toLowerCase(Locale.ROOT), category.trim());
-			}
+	private Company findOrCreateCompany(String name) {
+		return companyRepository.findByNameIgnoreCase(name).orElseGet(() -> {
+			Company created = new Company();
+			created.setName(name);
+			return companyRepository.save(created);
 		});
-		names.stream().filter(name -> name != null && !name.isBlank()).map(String::trim)
-				.forEach(name -> normalizedNames.putIfAbsent(name.toLowerCase(Locale.ROOT), name));
-		Map<String, Skill> skills = new HashMap<>();
-		skillRepository.findAllByNameInIgnoreCase(normalizedNames.values()).forEach(skill ->
-				skills.put(skill.getName().toLowerCase(Locale.ROOT), skill));
-		List<Skill> missing = normalizedNames.entrySet().stream().filter(entry -> !skills.containsKey(entry.getKey()))
-				.map(entry -> {
-					Skill created = new Skill();
-					created.setName(entry.getValue());
-					created.setCategory(normalizedCategories.get(entry.getKey()));
-					return created;
-				}).toList();
-		skillRepository.saveAll(missing).forEach(skill -> skills.put(skill.getName().toLowerCase(Locale.ROOT), skill));
-		normalizedNames.keySet().forEach(key -> {
-				Skill skill = skills.get(key);
-			if (skill.getCategory() == null && normalizedCategories.containsKey(key)) {
-				skill.setCategory(normalizedCategories.get(key));
-				skillRepository.save(skill);
-			}
-					JobApplicationSkill link = new JobApplicationSkill();
-					link.setApplication(application);
-					link.setSkill(skill);
-					link.setRequired(required);
-					application.getSkills().add(link);
-				});
 	}
 
-	private JobApplication getEntity(Long id) {
-		return applicationRepository.findById(id)
-				.orElseThrow(() -> new IllegalArgumentException("No se encontró la candidatura: " + id));
+	/**
+	 * Devuelve la competencia de cada clave, creando las que no existen. Si una competencia ya existía sin
+	 * categoría y ahora llega una, se le asigna (el cambio se guarda al cerrar la transacción).
+	 */
+	private Map<String, Skill> findOrCreateSkills(Map<String, String> namesByKey, Map<String, String> categoriesByKey) {
+		Map<String, Skill> skills = new HashMap<>();
+		if (namesByKey.isEmpty()) {
+			return skills;
+		}
+		skillRepository.findAllByNameInIgnoreCase(namesByKey.values())
+				.forEach(skill -> skills.put(SkillNames.key(skill.getName()), skill));
+		namesByKey.forEach((key, name) -> {
+			Skill skill = skills.computeIfAbsent(key, ignored -> {
+				Skill created = new Skill();
+				created.setName(name);
+				created.setCategory(categoriesByKey.get(key));
+				return skillRepository.save(created);
+			});
+			if (skill.getCategory() == null && categoriesByKey.containsKey(key)) {
+				skill.setCategory(categoriesByKey.get(key));
+			}
+		});
+		return skills;
+	}
+
+	private Map<String, String> normalizeCategories(Map<String, String> categories) {
+		Map<String, String> normalized = new HashMap<>();
+		categories.forEach((name, category) -> {
+			if (name != null && !name.isBlank() && category != null && !category.isBlank()) {
+				normalized.put(SkillNames.key(name), category.trim());
+			}
+		});
+		return normalized;
 	}
 
 	private JobApplicationResponse toResponse(JobApplication application) {
 		Set<String> required = new LinkedHashSet<>();
 		Set<String> optional = new LinkedHashSet<>();
-		application.getSkills().forEach(link -> (link.isRequired() ? required : optional).add(link.getSkill().getName()));
-		return new JobApplicationResponse(application.getId(), application.getCompany().getName(), application.getRoleTitle(),
-				application.getJobDescription(), application.getJobUrl(), application.getSalaryMin(), application.getSalaryMax(),
-				application.getSalaryCurrency(), application.getStatus(), application.getAppliedAt(), application.getAdditionalNotes(),
-				required, optional);
+		application.getSkills()
+				.forEach(link -> (link.isRequired() ? required : optional).add(link.getSkill().getName()));
+		return new JobApplicationResponse(application.getId(), application.getCompany().getName(),
+				application.getRoleTitle(), application.getJobDescription(), application.getJobUrl(),
+				application.getSalaryMin(), application.getSalaryMax(), application.getSalaryCurrency(),
+				application.getStatus(), application.getAppliedAt(), application.getAdditionalNotes(), required,
+				optional);
 	}
 
 	private String appendNote(String current, String addition) {
 		return current == null || current.isBlank() ? addition : current + System.lineSeparator() + addition;
-	}
-
-	private void requireText(String value, String field) {
-		if (value == null || value.isBlank()) {
-			throw new IllegalArgumentException(field + " es obligatorio");
-		}
 	}
 }

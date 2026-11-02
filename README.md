@@ -42,7 +42,7 @@ https://github.com/user-attachments/assets/65772638-d556-43ba-9f53-92cb965e1555
 
 - **📝 Smart job intake:** paste a job description and Gemini extracts the **required** and **nice-to-have** skills with structured output before the application is saved.
 - **🔄 Pipeline tracking:** `APPLIED` → `SCREENING` → `TECHNICAL_INTERVIEW` → `OFFER` / `REJECTED` / `WITHDRAWN`, with notes for each interview.
-- **🎯 Skill-gap analysis:** compares each posting's requirements with your skill profile and tells you what you know, what you're missing and which nice-to-haves you meet.
+- **🎯 Skill-gap analysis:** compares each posting's requirements with your skill profile and tells you what you know, what you're missing, and the same for nice-to-haves.
 - **🎤 Interview prep:** generates tough technical questions tailored to the role, with key answer points and a difficulty level, and saves them so you can review them later.
 - **📊 Analytics:** application funnel by status and the technologies that come up most in the postings that rejected you.
 
@@ -58,10 +58,10 @@ https://github.com/user-attachments/assets/65772638-d556-43ba-9f53-92cb965e1555
 | `obtener_candidatura` | Returns the full details of an application. |
 | `listar_candidaturas` | Lists applications in summary form, optionally filtered by status. |
 | `configurar_competencias_perfil` | Adds skills to your profile (or replaces it with `replaceExisting=true`). |
-| `obtener_analisis_carencias` | Compares a posting with your profile: skills you have, gaps and nice-to-haves you meet. |
-| `generar_preguntas_entrevista` | Generates and saves technical questions based on the role and its skills. |
+| `obtener_analisis_carencias` | Compares a posting with your profile: required and nice-to-have skills you have and the ones you're missing. |
+| `generar_preguntas_entrevista` | Generates technical questions based on the role and its skills and saves them, replacing any previous ones. |
 | `obtener_preparacion_entrevista` | Retrieves the saved questions for an application. |
-| `obtener_resumen_metricas` | Funnel metrics (`FUNNEL`), rejection metrics (`REJECTIONS`) or both (`ALL`). |
+| `obtener_resumen_metricas` | Application funnel by status plus the skills that come up most in rejected applications. |
 
 ### 💬 Example Prompts
 
@@ -100,7 +100,7 @@ https://github.com/user-attachments/assets/65772638-d556-43ba-9f53-92cb965e1555
 | **AI & MCP** | Spring AI 2.0.1: MCP Server (WebMVC, SSE, sync) + Google GenAI |
 | **Model** | Gemini (`gemini-2.5-flash-lite` by default) |
 | **Persistence** | PostgreSQL 17, Spring Data JPA, Hibernate |
-| **Other** | Lombok, Bean Validation, Maven Wrapper, Docker Compose |
+| **Other** | Lombok, Maven Wrapper, Docker Compose |
 
 ---
 
@@ -130,7 +130,7 @@ src/main/java/io/github/franra18/job_hunt_copilot_mcp/
 ├── repository/                      # Spring Data JPA repositories
 └── domain/
     ├── model/                       # JPA entities and enums
-    └── dto/                         # Requests and responses
+    └── dto/                         # Requests, responses and LLM output schemas (ai/)
 ```
 
 ---

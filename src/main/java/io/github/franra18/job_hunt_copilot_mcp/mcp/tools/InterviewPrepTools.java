@@ -14,23 +14,18 @@ public class InterviewPrepTools {
 	private final InterviewPrepService interviewPrepService;
 
 	@Tool(name = "generar_preguntas_entrevista",
-			description = "Genera y guarda preguntas técnicas difíciles usando el puesto y las competencias de la oferta")
+			description = "Genera preguntas técnicas difíciles usando el puesto y las competencias de la oferta y "
+					+ "las guarda, sustituyendo las generadas anteriormente para esa candidatura")
 	public InterviewPrepResponse generateInterviewQuestions(
-			@ToolParam(description = "Identificador positivo de la candidatura cuya oferta se usará como contexto") Long applicationId) {
-		return interviewPrepService.generateQuestions(requireApplicationId(applicationId));
+			@ToolParam(description = "Identificador positivo de la candidatura cuya oferta se usará como contexto")
+			Long applicationId) {
+		return interviewPrepService.generateQuestions(applicationId);
 	}
 
 	@Tool(name = "obtener_preparacion_entrevista",
 			description = "Obtiene las preguntas técnicas guardadas para una candidatura")
 	public InterviewPrepResponse getInterviewPreparation(
-			@ToolParam(description = "Identificador de la candidatura") Long applicationId) {
-		return interviewPrepService.getPreparation(requireApplicationId(applicationId));
-	}
-
-	private Long requireApplicationId(Long applicationId) {
-		if (applicationId == null || applicationId <= 0) {
-			throw new IllegalArgumentException("applicationId debe ser un número positivo");
-		}
-		return applicationId;
+			@ToolParam(description = "Identificador positivo de la candidatura") Long applicationId) {
+		return interviewPrepService.getPreparation(applicationId);
 	}
 }

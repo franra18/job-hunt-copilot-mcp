@@ -5,12 +5,15 @@ import io.github.franra18.job_hunt_copilot_mcp.domain.model.JobApplication;
 import io.github.franra18.job_hunt_copilot_mcp.domain.model.UserSkill;
 import io.github.franra18.job_hunt_copilot_mcp.repository.JobApplicationRepository;
 import io.github.franra18.job_hunt_copilot_mcp.repository.UserSkillRepository;
-import java.util.LinkedHashSet;
-import java.util.Locale;
-import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.Collection;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.TreeSet;
 
 @Service
 @RequiredArgsConstructor
@@ -20,23 +23,22 @@ public class GapAnalysisService {
 
 	@Transactional(readOnly = true)
 	public GapAnalysisResponse analyze(Long applicationId) {
-		JobApplication application = applicationRepository.findById(applicationId)
-				.orElseThrow(() -> new IllegalArgumentException("No se encontró la candidatura: " + applicationId));
-		Set<String> profile = userSkillRepository.findAllByOrderByNameAsc().stream()
-				.map(UserSkill::getName).map(name -> name.toLowerCase(Locale.ROOT)).collect(java.util.stream.Collectors.toSet());
-		Set<String> mastered = new LinkedHashSet<>();
-		Set<String> gaps = new LinkedHashSet<>();
-		Set<String> desirable = new LinkedHashSet<>();
+		JobApplication application = applicationRepository.getRequiredWithDetails(applicationId);
+		Set<String> profile = profileKeys(userSkillRepository.findAll());
+		Set<String> masteredRequired = sortedSet();
+		Set<String> criticalGaps = sortedSet();
+		Set<String> masteredOptional = sortedSet();
+		Set<String> optionalGaps = sortedSet();
 		application.getSkills().forEach(link -> {
 			String name = link.getSkill().getName();
+			boolean mastered = profile.contains(SkillNames.key(name));
 			if (link.isRequired()) {
-				if (profile.contains(name.toLowerCase(Locale.ROOT))) mastered.add(name);
-				else gaps.add(name);
-			} else if (profile.contains(name.toLowerCase(Locale.ROOT))) {
-				desirable.add(name);
+				(mastered ? masteredRequired : criticalGaps).add(name);
+			} else {
+				(mastered ? masteredOptional : optionalGaps).add(name);
 			}
 		});
-		return new GapAnalysisResponse(applicationId, mastered, gaps, desirable);
+		return new GapAnalysisResponse(applicationId, masteredRequired, criticalGaps, masteredOptional, optionalGaps);
 	}
 
 	@Transactional
@@ -44,21 +46,26 @@ public class GapAnalysisService {
 		if (replaceExisting) {
 			userSkillRepository.deleteAllInBatch();
 		}
-		Set<String> normalized = new LinkedHashSet<>();
-		if (names != null) names.stream().filter(name -> name != null && !name.isBlank())
-				.map(String::trim).forEach(normalized::add);
-		Set<String> existing = userSkillRepository.findAllByOrderByNameAsc().stream()
-				.map(UserSkill::getName)
-				.collect(java.util.stream.Collectors.toSet());
-		userSkillRepository.saveAll(normalized.stream()
-				.filter(name -> existing.stream().noneMatch(value -> value.equalsIgnoreCase(name)))
-				.map(name -> {
-			UserSkill skill = new UserSkill();
-			skill.setName(name);
-			return skill;
-		}).toList());
-		return userSkillRepository.findAllByOrderByNameAsc().stream().map(UserSkill::getName)
-				.collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+		Set<String> existing = profileKeys(userSkillRepository.findAll());
+		List<UserSkill> toCreate = SkillNames.clean(names).entrySet().stream()
+				.filter(entry -> !existing.contains(entry.getKey()))
+				.map(entry -> {
+					UserSkill skill = new UserSkill();
+					skill.setName(entry.getValue());
+					return skill;
+				})
+				.toList();
+		userSkillRepository.saveAll(toCreate);
+		Set<String> profile = new LinkedHashSet<>();
+		userSkillRepository.findAllByOrderByNameAsc().forEach(skill -> profile.add(skill.getName()));
+		return profile;
 	}
 
+	private static Set<String> profileKeys(Collection<UserSkill> skills) {
+		return SkillNames.clean(skills.stream().map(UserSkill::getName).toList()).keySet();
+	}
+
+	private static Set<String> sortedSet() {
+		return new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
+	}
 }
